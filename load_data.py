@@ -4,11 +4,6 @@ import tarfile
 import urllib.request
 import zipfile
 
-# Public loghub dataset archives (Zenodo). These files are large and must NOT be
-# committed to GitHub; they are downloaded on demand instead.
-#   BGL.zip        -> ~709MiB extracted (BGL.log at archive root)
-#   OpenStack.tar.gz -> ~59MiB (openstack_*.log + anomaly_labels.txt at root)
-# Source: https://github.com/logpai/loghub (README download table)
 DATASETS = {
     "openstack": {
         "url": "https://zenodo.org/records/8196385/files/OpenStack.tar.gz?download=1",
@@ -34,7 +29,7 @@ def run_cmd(cmd):
         print(res.stdout.strip())
 
 def _extract(archive_path, extract_dir):
-    """Extract a .zip or .tar.gz archive into extract_dir."""
+    # Extract a .zip or .tar.gz archive into extract_dir
     os.makedirs(extract_dir, exist_ok=True)
     if archive_path.endswith(".zip"):
         with zipfile.ZipFile(archive_path) as z:
@@ -46,15 +41,9 @@ def _extract(archive_path, extract_dir):
         raise ValueError(f"Unsupported archive format: {archive_path}")
 
 def ensure_dataset(name):
-    """
-    Ensure a loghub dataset is present locally, downloading and extracting it
-    from Zenodo on demand. Returns True if the dataset marker file exists.
-
-    The large log files are intentionally kept out of Git (see .gitignore);
-    this makes the repo lightweight while remaining reproducible for anyone
-    who clones it. Override the download with an env var if you already have
-    the archive locally, e.g. OPENSTACK_ARCHIVE=/path/OpenStack.tar.gz.
-    """
+    # Ensure a loghub dataset is present locally
+    # downloading and extract from Zenodo on demand
+    # Returns True if the dataset marker file exists.
     cfg = DATASETS[name]
     marker = cfg["marker"]
     if os.path.exists(marker):
@@ -150,7 +139,7 @@ def main():
             str_split(column0, ' ')[7], str_split(column0, ' ')[8], str_split(column0, ' ')[9],
             array_to_string(str_split(column0, ' ')[10:], ' ')
         FROM read_csv('/tmp/BGL.log', header=false, sep='\\n', quote='', escape='', auto_detect=false, strict_mode=false, ignore_errors=true, columns={'column0': 'VARCHAR'})
-        WHERE trim(column0) != '';
+        WHERE trim(column0) != '' LIMIT 100000;
         """
         run_cmd(f'docker exec -i serenedb serened psql -p 7890 -c "{bgl_sql}"')
 
