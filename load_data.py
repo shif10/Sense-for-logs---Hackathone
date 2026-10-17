@@ -1,5 +1,29 @@
 import subprocess
 import os
+import tarfile
+import urllib.request
+import zipfile
+
+# Public loghub dataset archives (Zenodo). These files are large and must NOT be
+# committed to GitHub; they are downloaded on demand instead.
+#   BGL.zip        -> ~709MiB extracted (BGL.log at archive root)
+#   OpenStack.tar.gz -> ~59MiB (openstack_*.log + anomaly_labels.txt at root)
+# Source: https://github.com/logpai/loghub (README download table)
+DATASETS = {
+    "openstack": {
+        "url": "https://zenodo.org/records/8196385/files/OpenStack.tar.gz?download=1",
+        "archive": "OpenStack.tar.gz",
+        "extract_dir": ".",
+        # File that signals the dataset is already present (skip download).
+        "marker": "openstack_abnormal.log",
+    },
+    "bgl": {
+        "url": "https://zenodo.org/records/8196385/files/BGL.zip?download=1",
+        "archive": "BGL_dataset/BGL.zip",
+        "extract_dir": "BGL_dataset",
+        "marker": "BGL_dataset/BGL.log",
+    },
+}
 
 def run_cmd(cmd):
     print(f"Running: {cmd[:60]}...")
@@ -8,6 +32,63 @@ def run_cmd(cmd):
         print(f"Error: {res.stderr}")
     else:
         print(res.stdout.strip())
+
+def _extract(archive_path, extract_dir):
+    """Extract a .zip or .tar.gz archive into extract_dir."""
+    os.makedirs(extract_dir, exist_ok=True)
+    if archive_path.endswith(".zip"):
+        with zipfile.ZipFile(archive_path) as z:
+            z.extractall(extract_dir)
+    elif archive_path.endswith((".tar.gz", ".tgz")):
+        with tarfile.open(archive_path, "r:gz") as t:
+            t.extractall(extract_dir)
+    else:
+        raise ValueError(f"Unsupported archive format: {archive_path}")
+
+def ensure_dataset(name):
+    """
+    Ensure a loghub dataset is present locally, downloading and extracting it
+    from Zenodo on demand. Returns True if the dataset marker file exists.
+
+    The large log files are intentionally kept out of Git (see .gitignore);
+    this makes the repo lightweight while remaining reproducible for anyone
+    who clones it. Override the download with an env var if you already have
+    the archive locally, e.g. OPENSTACK_ARCHIVE=/path/OpenStack.tar.gz.
+    """
+    cfg = DATASETS[name]
+    marker = cfg["marker"]
+    if os.path.exists(marker):
+        print(f"[{name}] already present at {marker}")
+        return True
+
+    archive_path = cfg["archive"]
+    env_override = os.environ.get(f"{name.upper()}_ARCHIVE")
+    if env_override and os.path.exists(env_override):
+        print(f"[{name}] using local archive from env: {env_override}")
+        archive_path = env_override
+    elif os.path.exists(archive_path):
+        print(f"[{name}] using existing archive: {archive_path}")
+    else:
+        os.makedirs(os.path.dirname(archive_path) or ".", exist_ok=True)
+        print(f"[{name}] downloading from {cfg['url']} ...")
+        try:
+            urllib.request.urlretrieve(cfg["url"], archive_path)
+        except Exception as e:
+            print(f"[{name}] ERROR: download failed: {e}")
+            return False
+
+    print(f"[{name}] extracting {archive_path} -> {cfg['extract_dir']}")
+    try:
+        _extract(archive_path, cfg["extract_dir"])
+    except Exception as e:
+        print(f"[{name}] ERROR: extraction failed: {e}")
+        return False
+
+    if not os.path.exists(marker):
+        print(f"[{name}] ERROR: expected {marker} after extraction, not found")
+        return False
+    print(f"[{name}] ready: {marker}")
+    return True
 
 def main():
     print("=== Initializing SereneDB Schema & Ingestion ===")
@@ -34,7 +115,8 @@ def main():
     """
     run_cmd(f'docker exec -i serenedb serened psql -p 7890 -c "{schema_sql}"')
     
-    # 2. Copy and Ingest OpenStack
+    # 2. Copy and Ingest OpenStack (download on demand if missing)
+    ensure_dataset("openstack")
     for f in ["openstack_normal1.log", "openstack_normal2.log", "openstack_abnormal.log"]:
         if os.path.exists(f):
             run_cmd(f"docker cp .\\{f} serenedb:/tmp/{f}")
@@ -55,7 +137,8 @@ def main():
             """
             run_cmd(f'docker exec -i serenedb serened psql -p 7890 -c "{ingest_sql}"')
 
-    # 3. Copy and Ingest BGL
+    # 3. Copy and Ingest BGL (download on demand if missing)
+    ensure_dataset("bgl")
     bgl_file = "BGL_dataset/BGL.log" if os.path.exists("BGL_dataset/BGL.log") else "BGL.log"
     if os.path.exists(bgl_file):
         run_cmd(f"docker cp {bgl_file} serenedb:/tmp/BGL.log")
@@ -67,7 +150,7 @@ def main():
             str_split(column0, ' ')[7], str_split(column0, ' ')[8], str_split(column0, ' ')[9],
             array_to_string(str_split(column0, ' ')[10:], ' ')
         FROM read_csv('/tmp/BGL.log', header=false, sep='\\n', quote='', escape='', auto_detect=false, strict_mode=false, ignore_errors=true, columns={'column0': 'VARCHAR'})
-        WHERE trim(column0) != '' LIMIT 100000;
+        WHERE trim(column0) != '';
         """
         run_cmd(f'docker exec -i serenedb serened psql -p 7890 -c "{bgl_sql}"')
 
