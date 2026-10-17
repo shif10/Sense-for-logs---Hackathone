@@ -1,0 +1,15 @@
+
+dataset,component,team_name,lead_contact
+openstack,nova-api,Compute Platform Team,compute-lead@platform.internal
+openstack,nova-compute,Hypervisor Operations,hypervisor@platform.internal
+openstack,nova-scheduler,Core Scheduling Team,scheduler@platform.internal
+bgl,KERNEL,Core OS Team,os-team@platform.internal
+bgl,SERPENT,Core OS Team,os-team@platform.internal
+bgl,APP,Application Runtime Team,apps@platform.internal
+bgl,HARDWARE,Data Center Ops,dc-ops@platform.internal
+bgl,DISCOVERY,Cluster Operations,cluster-ops@platform.internal
+bgl,BGLMASTER,Cluster Operations,cluster-ops@platform.internal
+bgl,MMCS,Machine Management Team,machine-mgmt@platform.internal
+bgl,CMCS,Machine Management Team,machine-mgmt@platform.internal
+bgl,LINKCARD,Interconnect Team,interconnect@platform.internal
+bgl,MONITOR,Monitoring Team,monitoring@platform.internal
