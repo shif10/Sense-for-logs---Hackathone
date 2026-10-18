@@ -1,5 +1,55 @@
 # Sense-for-logs---Hackathone
 
+## Quickstart & Reproduction Guide
+
+### 1. Clone the Repository
+Clone the repository and navigate into the project directory[cite: 7]:
+```powershell
+git clone [https://github.com/shif10/Sense-for-logs---Hackathone.git](https://github.com/shif10/Sense-for-logs---Hackathone.git)
+cd Sense-for-logs---Hackathone
+
+
+2. Set Up Python Environment
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install fastmcp duckdb psycopg2-binary
+
+
+3. Start SereneDB in Docker
+docker run -d --name serenedb -p 7890:7890 serenedb/serenedb:latest
+
+# Verify that the container is up and healthy:
+docker ps --filter "name=serenedb"
+
+4. Ingest Telemetry Data
+python load_data.py
+
+# To quickly verify that the data is loaded directly from the terminal, check the record count:
+docker exec -it serenedb serened psql -p 7890 -c "SELECT level, count(level) AS frequency FROM openstack GROUP BY level ORDER BY frequency DESC;"
+
+5. Run and Configure the MCP Server
+# The project exposes 4 MCP tools via mcp_server.py (search_error_logs, get_nearby_events, get_recurring_issues_by_team, get_risk_distribution)
+
+Configure in Kiro / Claude Desktop
+Add the server configuration to your MCP settings file (e.g., .kiro/settings/mcp.json):
+
+{
+  "mcpServers": {
+    "serenedb-logs": {
+      "command": "python",
+      "args": ["mcp_server.py"]
+    }
+  }
+}
+
+
+6. How to See the Results
+ Natural Language via AI Chat (Kiro)
+  "What broke in the OpenStack logs and who owns it?"
+  "Search for primary errors in OpenStack and show surrounding events."
+  "What is our overall risk distribution across the OpenStack corpus?"   
+
+
 
 # Official SereneDB Multi-Role Observability Analysis
 
